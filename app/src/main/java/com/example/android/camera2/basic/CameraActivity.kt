@@ -20,15 +20,65 @@ import android.os.Bundle
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import com.example.android.camera2.basic.databinding.ActivityCameraBinding
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothManager
+import android.bluetooth.le.BluetoothLeScanner
+import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanResult
+import android.content.Context
+import android.os.Handler
+import android.os.Looper
+import android.widget.Toast
 
 class CameraActivity : AppCompatActivity() {
 
     private lateinit var activityCameraBinding: ActivityCameraBinding
+    private var bluetoothAdapter: BluetoothAdapter? = null
+    private var bleScanner: BluetoothLeScanner? = null
+    private val scanCallback = object : ScanCallback() {
+        override fun onScanResult(callbackType: Int, result: ScanResult) {
+            // ESP32 비콘 신호 판별 (이름, UUID 등으로)
+            if (result.device.name?.contains("ESP32") == true) {
+                runOnUiThread {
+                    Toast.makeText(this@CameraActivity, "ESP32 비콘 감지!", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         activityCameraBinding = ActivityCameraBinding.inflate(layoutInflater)
         setContentView(activityCameraBinding.root)
+
+
+        if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION), 0)
+        }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            if (checkSelfPermission(android.Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(android.Manifest.permission.BLUETOOTH_SCAN), 0)
+            }
+        }
+
+        // BLE 초기화
+        val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+        bluetoothAdapter = bluetoothManager.adapter
+
+        // 블루투스 On 다이얼로그
+        if (bluetoothAdapter != null && bluetoothAdapter?.isEnabled == false) {
+            val enableBtIntent = android.content.Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+            startActivityForResult(enableBtIntent, 1)
+        }
+
+        // BLE 스캐너 초기화 및 스캔 시작
+        bleScanner = bluetoothAdapter?.bluetoothLeScanner
+        bleScanner?.startScan(scanCallback)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        bleScanner?.stopScan(scanCallback)
     }
 
     override fun onResume() {
